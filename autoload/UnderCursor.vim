@@ -1,86 +1,123 @@
-function! UnderCursor#highlight_init()
-    let base_hl = 'term=underline cterm=underline gui=underline'
-    let Get_bg = { hl -> hl->split('\v\s+')->map('trim(v:val)')
-        \ ->filter("v:val =~# '".'\v^\w+bg=\S+$'."'")->join(' ') }
-
-    let cursorline_hl = execute('highlight CursorLine')->Get_bg()
-    exec 'hi UnderCursorWord' base_hl cursorline_hl
-
-    let visual_hl = execute('highlight Visual')->Get_bg()
-    exec 'hi UnderCursorSelect' base_hl visual_hl
+functio! s:highlight_background(hl_group)
+    return join(filter(map(split(a:hl_group, '\v\s+'), 'trim(v:val)'),
+        \       'v:val =~# ''\v^\w+bg=\S+$'''), ' ')
 endfunction
 
-function! UnderCursor#_highlight_clear()
-    if exists('w:undercursor_hl_id')
-        silent! call matchdelete(w:undercursor_hl_id)
+function! s:define_highlight_group(hl_group, hl_args)
+    execute 'highlight' a:hl_group join(a:hl_args, ' ')
+endfunction
+
+function! UnderCursor#highlight_init()
+    let base_highlight_args = 'term=underline cterm=underline gui=underline'
+    call s:define_highlight_group('UnderCursorWord', [
+        \ base_highlight_args,
+        \ s:highlight_background(execute('highlight CursorLine'))
+        \])
+    call s:define_highlight_group('UnderCursorSelect', [
+        \ base_highlight_args,
+        \ s:highlight_background(execute('highlight Visual'))
+        \])
+endfunction
+
+function! s:has_highlight()
+    return exists('w:undercursor_hl_id')
+endfunction
+
+function! s:delete_highlight()
+        call matchdelete(w:undercursor_hl_id)
+        unlet w:undercursor_hl_id
+endfunction
+
+function! UnderCursor#highlight_clear()
+    if s:has_highlight()
+        call s:delete_highlight()
     endif
 endfunction
 
-function! UnderCursor#_highlight_pattern(pattern, hl_group, ...)
-    let priority = get(a:, 1, 0)
-    let hl_id = get(w:, 'undercursor_hl_id', -1)
-    call UnderCursor#_highlight_clear()
-    let w:undercursor_hl_id = matchadd(a:hl_group, a:pattern, priority, hl_id)
+function! s:current_pattern()
+    return get(w:, 'undercursor_hl', '')
+endfunction
+
+function! s:update_pattern(pattern)
+    let w:undercursor_hl = a:pattern
+endfunction
+
+function! s:match_empty(pattern)
+    return '' =~# a:pattern
+endfunction
+
+function! s:add_highlight(pattern, hl_group)
+        let w:undercursor_hl_id = matchadd(a:hl_group, a:pattern, 0)
+endfunction
+
+function! s:highlight_pattern(pattern, hl_group)
+    if !s:match_empty(a:pattern)
+        call s:add_highlight(a:pattern, a:hl_group)
+    endif
+endfunction
+
+function! UnderCursor#highlight_pattern(pattern, hl_group)
+    if s:current_pattern() !=# a:pattern
+        call s:update_pattern(a:pattern)
+        call UnderCursor#highlight_clear()
+        call s:highlight_pattern(a:pattern, a:hl_group)
+    endif
+endfunction
+
+function! UnderCursor#word()
+    let word_under_cursor_pattern = '\v%<'.(col('.') + 1).'c\w+%>'.col('.').'c'
+    return matchstr(getline('.'), word_under_cursor_pattern)
 endfunction
 
 function! UnderCursor#highlight_word()
-    let cur_line = getline('.')
-    let cur_col = col('.')
-    let word = matchstr(cur_line, '\v\w*%'.cur_col.'c\w+')
-
-    if word !=# get(w:, 'undercursor_hl', '')
-        let w:undercursor_hl = word
-
-        call UnderCursor#_highlight_clear()
-        if !empty(word)
-            let ptn = printf('\V\(\w\)\@<!%s\(\w\)\@!', escape(word, '\'))
-            call UnderCursor#_highlight_pattern(ptn, 'UnderCursorWord')
-        endif
-    endif
+    let word_pattern = '\V\w\@<!'.escape(UnderCursor#word(), '\').'\w\@!'
+    call UnderCursor#highlight_pattern(word_pattern, 'UnderCursorWord')
 endfunction
 
-function! UnderCursor#visual_content()
-    if mode() ==# "v"
-        let [line_start, column_start] = getpos('v')[1:2]
-        let [line_end, column_end] = getpos('.')[1:2]
-        if line_start > line_end ||
-            \ line_start == line_end && column_start > column_end
-            let [line_start, column_start, line_end, column_end] =
-                \ [line_end, column_end, line_start, column_start]
-        endif
-
-        let lines = getline(line_start, line_end)
-        if empty(lines)
-            let content = ''
-        else
-            let lines[-1] = substitute(lines[-1], '\v%>'.column_end.'c.+', '', '')
-            let lines[0] = lines[0][column_start - 1:]
-            let content = trim(join(lines, "\n"))
-        endif
-
-        return content
+function! s:visual_pos()
+    let [begin_line, begin_col] = getpos('v')[1:2]
+    let [end_line, end_col] = getpos('.')[1:2]
+    if begin_line < end_line ||
+        \ begin_line == end_line && begin_col <= end_col
+        return { 'begin': { 'line': begin_line, 'col': begin_col },
+            \    'end':   { 'line': end_line,   'col': end_col   } }
     else
-        return ''
+        return { 'begin': { 'line': end_line,   'col': end_col   },
+            \    'end':   { 'line': begin_line, 'col': begin_col } }
     endif
 endfunction
 
-function! UnderCursor#visual_content_escape()
-    return substitute(substitute(escape(UnderCursor#visual_content(), '\'),
-        \                        "\r", '\\r', 'g'),
+function! s:remove_content_outside(lines)
+    if !empty(a:lines)
+        let a:lines[-1] = substitute(a:lines[-1],
+            \                        '\v%>'.s:visual_pos().end.col.'c.+',
+            \                        '', '')
+        let a:lines[0] = a:lines[0][s:visual_pos().begin.col - 1:]
+    endif
+    return a:lines
+endfunction
+
+function! s:content()
+    let lines = getline(s:visual_pos().begin.line, s:visual_pos().end.line)
+    return trim(join(s:remove_content_outside(lines), "\n"))
+endfunction
+
+function! UnderCursor#escape(str)
+    return substitute(substitute(escape(a:str, '\'), "\r", '\\r', 'g'),
         \             "\n", '\\n', 'g')
 endfunction
 
+function! UnderCursor#raw_content()
+    return s:content()
+endfunction
+
+function! UnderCursor#content()
+    return UnderCursor#escape(UnderCursor#raw_content())
+endfunction
+
 function! UnderCursor#highlight_select()
-    if mode() ==# "v"
-        let content = UnderCursor#visual_content_escape()
-
-        if content !=# get(w:, 'undercursor_hl', '')
-            let w:undercursor_hl = content
-
-            if !empty(content)
-                let ptn = printf('\V\c%s', content)
-                call UnderCursor#_highlight_pattern(ptn, 'UnderCursorSelect')
-            endif
-        endif
+    if mode() ==? 'v'
+        let select_pattern = '\V\c'.UnderCursor#content()
+        call UnderCursor#highlight_pattern(select_pattern, 'UnderCursorSelect')
     endif
 endfunction

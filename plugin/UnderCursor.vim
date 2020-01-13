@@ -11,5 +11,5 @@ augroup UnderCursor
     autocmd CursorMoved * call UnderCursor#highlight_select()
 augroup End
 
-vnoremap <expr> * "\<Esc>/\\V".escape(UnderCursor#visual_content_escape(), '/')."\<CR>"
-vnoremap <expr> # "\<Esc>?\\V".escape(UnderCursor#visual_content_escape(), '?')."\<CR>"
+vnoremap <expr> * "\<Esc>/\\V".escape(UnderCursor#content(), '/')."\<CR>"
+vnoremap <expr> # "\<Esc>/\\V".escape(UnderCursor#content(), '?')."\<CR>"
