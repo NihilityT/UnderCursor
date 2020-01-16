@@ -7,6 +7,10 @@ if !exists('g:UnderCursor_expand_blank')
     let g:UnderCursor_expand_blank = 1
 endif
 
+if !exists('g:UnderCursor_enable')
+    let g:UnderCursor_enable = 1
+endif
+
 call UnderCursor#highlight_init()
 
 augroup UnderCursor

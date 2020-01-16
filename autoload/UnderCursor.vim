@@ -60,7 +60,9 @@ function! UnderCursor#highlight_pattern(pattern, hl_group)
     if s:current_pattern() !=# a:pattern
         call s:update_pattern(a:pattern)
         call UnderCursor#highlight_clear()
-        call s:highlight_pattern(a:pattern, a:hl_group)
+        if get(g:, 'UnderCursor_enable')
+            call s:highlight_pattern(a:pattern, a:hl_group)
+        endif
     endif
 endfunction
 
