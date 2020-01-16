@@ -127,12 +127,20 @@ function! UnderCursor#escape(str)
         \             "\n", '\\n', 'g')
 endfunction
 
+function! UnderCursor#expand_blank(str)
+    return substitute(escape(a:str, '\'), '\v[\r\n[:blank:]]+', '\\[\\r\\n[:blank:]]\\+', 'g')
+endfunction
+
 function! UnderCursor#raw_content()
     return s:content()
 endfunction
 
 function! UnderCursor#content()
-    return UnderCursor#escape(UnderCursor#raw_content())
+    if g:UnderCursor_expand_blank
+        return UnderCursor#expand_blank(UnderCursor#raw_content())
+    else
+        return UnderCursor#escape(UnderCursor#raw_content())
+    endif
 endfunction
 
 function! UnderCursor#highlight_select()

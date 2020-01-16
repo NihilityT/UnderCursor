@@ -3,6 +3,10 @@ if exists('g:UnderCursor_loaded')
 endif
 let g:UnderCursor_loaded = 1
 
+if !exists('g:UnderCursor_expand_blank')
+    let g:UnderCursor_expand_blank = 1
+endif
+
 call UnderCursor#highlight_init()
 
 augroup UnderCursor
