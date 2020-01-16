@@ -74,7 +74,19 @@ function! UnderCursor#highlight_word()
     call UnderCursor#highlight_pattern(word_pattern, 'UnderCursorWord')
 endfunction
 
-function! s:visual_pos()
+function! s:visual_pos_line()
+    let begin_line = line('v')
+    let end_line = line('.')
+    if begin_line <= end_line
+        return { 'begin': { 'line': begin_line, 'col': 0 },
+            \    'end':   { 'line': end_line,   'col': 0 } }
+    else
+        return { 'begin': { 'line': end_line,   'col': 0 },
+            \    'end':   { 'line': begin_line, 'col': 0 } }
+    endif
+endfunction
+
+function! s:visual_pos_chars()
     let [begin_line, begin_col] = getpos('v')[1:2]
     let [end_line, end_col] = getpos('.')[1:2]
     if begin_line < end_line ||
@@ -87,8 +99,16 @@ function! s:visual_pos()
     endif
 endfunction
 
+function! s:visual_pos()
+    if mode() ==# 'V' || mode() ==# 'S'
+        return s:visual_pos_line()
+    else
+        return s:visual_pos_chars()
+    endif
+endfunction
+
 function! s:remove_content_outside(lines)
-    if !empty(a:lines)
+    if !empty(a:lines) && s:visual_pos().end.col
         let a:lines[-1] = substitute(a:lines[-1],
             \                        '\v%>'.s:visual_pos().end.col.'c.+',
             \                        '', '')
@@ -116,7 +136,7 @@ function! UnderCursor#content()
 endfunction
 
 function! UnderCursor#highlight_select()
-    if mode() ==? 'v'
+    if mode() ==? 'v' || mode() ==? 's'
         let select_pattern = '\V\c'.UnderCursor#content()
         call UnderCursor#highlight_pattern(select_pattern, 'UnderCursorSelect')
     endif
